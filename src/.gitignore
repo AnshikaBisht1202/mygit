@@ -1,2 +1,4 @@
 mygit
 *.out
+test/
+*.txt
