@@ -4,6 +4,7 @@
 #include <sys/stat.h>
 #include <errno.h>
 #include <zlib.h>
+#include <openssl/sha.h>
 
 void init()
 {
@@ -84,6 +85,56 @@ void cat_file(char *flag, char *hash)
     fwrite(ptr, 1, content_size, stdout);
 }
 
+void hash_object(char *flag, char *file_path)
+{
+    FILE *fp = fopen(file_path, "rb");
+    if (fp == NULL) {
+        fprintf(stderr, "Failed to open file: %s\n", strerror(errno));
+        exit(110);
+    }
+    fseek(fp, 0, SEEK_END);
+    long file_size = ftell(fp);
+    rewind(fp);
+
+    char *file_content = malloc(file_size);
+    if (file_content == NULL) {
+        fprintf(stderr, "Failed to allocate memory: %s\n", strerror(errno));
+        fclose(fp);
+        exit(120);
+    }
+    fread(file_content, 1, file_size, fp);
+    fclose(fp);
+
+    char header[64];
+
+    int header_len = snprintf(header, sizeof(header), "blob %ld", file_size);
+
+    int full_len = header_len + 1 + file_size;
+
+    char *buffer = malloc(full_len);
+    if (buffer == NULL) {
+        fprintf(stderr, "Failed to allocate memory: %s\n", strerror(errno));
+        free(file_content);
+        exit(130);
+    }
+
+    memcpy(buffer,header, header_len);
+    buffer[header_len] = '\0';
+    memcpy(buffer + 1 + header_len, file_content, file_size);
+
+    unsigned char sha_hash[SHA_DIGEST_LENGTH];
+
+    SHA1(buffer, full_len, sha_hash);
+
+    char sha_hex[41];
+
+    for (int i =0; i < SHA_DIGEST_LENGTH; i++) {
+        sprintf(sha_hex + i * 2, "%02x", sha_hash[i]);
+    }
+    sha_hex[40] = '\0';
+}
+
+
 int main(int argc, char *argv[]) {
    
     setbuf(stdout, NULL);
@@ -105,6 +156,13 @@ int main(int argc, char *argv[]) {
             return 1;
         }
         cat_file(argv[2], argv[3]);
+    }
+    else if (strcmp(command, "hash-object") == 0) {
+        if (argc < 3) {
+            fprintf(stderr, "Usage: ./your_program.sh hash-object <file>\n");
+            return 1;
+        }
+        hash_object(argv[2], argv[3]);
     }
     else {
         fprintf(stderr, "Unknown command %s\n", command);
