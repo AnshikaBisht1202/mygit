@@ -28,7 +28,6 @@ void init()
         printf("Initialized git directory\n");
     }
 
-
 void cat_file(char *flag, char *hash)
 {
     char file_path[64];
@@ -132,8 +131,51 @@ void hash_object(char *flag, char *file_path)
         sprintf(sha_hex + i * 2, "%02x", sha_hash[i]);
     }
     sha_hex[40] = '\0';
-}
 
+    long compressed_size = compressBound(full_len);
+    Bytef *compressed_data = malloc(compressed_size);
+    if (compressed_data == NULL) {
+        fprintf(stderr, "Failed to allocate memory: %s\n", strerror(errno));
+        free(file_content);
+        free(buffer);
+        exit(140);  
+    }
+    int status = compress(compressed_data, &compressed_size, (Bytef *)buffer, full_len);
+    if (status != Z_OK) {
+        fprintf(stderr, "Failed to compress data: %d\n", status);
+        free(file_content);
+        free(buffer);
+        free(compressed_data);
+        exit(150);
+    }
+
+    char dir_path[64];
+    sprintf(dir_path, ".git/objects/%c%c", sha_hex[0], sha_hex[1]);
+
+    mkdir(dir_path, 0755);
+    
+    if (mkdir(dir_path, 0755) == -1 && errno != EEXIST) {
+        fprintf(stderr, "Failed to create directory: %s\n", strerror(errno));
+        free(file_content);
+        free(buffer);
+        free(compressed_data);
+        exit(160);
+    }   
+
+    char file[128];
+    sprintf(file, "%s/%s", dir_path, sha_hex + 2);
+
+    FILE *ffp = fopen(file, "wb");
+
+    fwrite(compressed_data, 1, compressed_size, ffp);
+    fclose(ffp);
+
+    printf("%s\n", sha_hex);
+
+    free(buffer);
+    free(compressed_data);
+    free(file_content);
+}
 
 int main(int argc, char *argv[]) {
    
